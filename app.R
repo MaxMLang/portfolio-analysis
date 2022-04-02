@@ -7,6 +7,7 @@ library(tidyverse)
 library(lubridate)
 library(shinythemes)
 library(rsconnect)
+library(treemapify)
 
 tickers <- read_csv("ticker_data.csv") %>% 
   select(Symbol, Name, Country, Industry, `IPO Year`)
@@ -130,22 +131,6 @@ The Treynor ratio is similar to the Sharpe ratio, although the Sharpe ratio uses
                          h3("Single stock returns"),
                          h5("(Only displayed for a portfolio with less than 15 tickers)"),
                                           plotOutput("plot_stock_returns"),
-                        h3("CAPM model for each stock"),
-                        p(strong("Active Premium"),br(), "The investment's annualized return - benchmark's annualized return"),
-                        p(strong("Alpha"), br(), "The number actually indicates the percentage above or below a benchmark index that the stock or fund price achieved.",
-                          "Note, alpha is a historical number. It's useful to track a stock's alpha over time to see how it did, but it can't tell you how it will do tomorrow."),
-                        p(strong("Beta", br(), "Beta is an indication of the volatility of a stock, a fund, or a stock portfolio in comparison with a benchmark index. The baseline number for beta is one, which indicates that the security's price moves exactly as the market moves. A beta of less than 1 means that the security is less volatile than the market, while a beta greater than 1 indicates that its price is more volatile than the market.")),
-                        p(strong("Information Ratio"), br(), "The information ratio (IR) is a measurement of portfolio returns above the returns of a benchmark, usually an index such as the S&P 500, to the volatility of those returns.
-The information ratio is used to evaluate the skill of a portfolio manager at generating returns in excess of a given benchmark."),
-                        p(strong("R Squared"), br(), "R-squared measures how closely the performance of an asset can be attributed to the performance of a selected benchmark index.
-R-squared is measured on a scale between 0 and 100; the higher the R-squared number, the more correlated the asset is to its benchmark."),
-                        p(strong("Tracking Error"), br(), "Tracking error is the difference in actual performance between a position (usually an entire portfolio) and its corresponding benchmark.
-The tracking error can be viewed as an indicator of how actively a fund is managed and its corresponding risk level.
-Evaluating a past tracking error of a portfolio manager may provide insight into the level of benchmark risk control the manager may demonstrate in the future. "),
-                        p(strong("Treynor Ratio"), br(), "The Treynor ratio is a risk/return measure that allows investors to adjust a portfolio's returns for systematic risk.
-A higher Treynor ratio result means a portfolio is a more suitable investment.
-The Treynor ratio is similar to the Sharpe ratio, although the Sharpe ratio uses a portfolio's standard deviation to adjust the portfolio returns."),
-                        tableOutput("capm_single_stock"),
                 h3("Single Stock adjusted returns and selected baseline index"),
                 dataTableOutput("rarb_single_stock"))
                 
@@ -255,7 +240,7 @@ server <- function(input, output) {
                         Rb = Rb,
                         performance_fun = table.CAPM)
      
-    output$capm_single_stock <- renderTable(capm_single_stock)
+    
     
     wts <- as.tibble(df_portfolio %>% select(ticker, pct_of_portfolio))
     
@@ -448,7 +433,7 @@ server <- function(input, output) {
                        Rb = Rb,
                        performance_fun = table.CAPM)
       
-      output$capm_single_stock <- tableOutput(capm_single_stock)
+      
       
       wts <- as.tibble(df_portfolio %>% select(ticker, pct_of_portfolio))
       
