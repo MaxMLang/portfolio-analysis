@@ -4,10 +4,12 @@ library(shinyjs)
 library(shinyWidgets)
 library(tidyquant)
 library(tidyverse)
+library(lubridate)
+library(shinythemes)
 
 # Define UI for miles per gallon app ----
-ui <- pageWithSidebar(
-  
+ui <- fluidPage(
+  theme = shinytheme("superhero"), 
   # App title ----
   headerPanel("Stock Report Creator"),
   
@@ -23,11 +25,13 @@ ui <- pageWithSidebar(
                  value = 1,
                  min = 1,
                  step = 1),
+    tags$hr(),
     numericInput("invest_sum", "Insert the sum you invested in $",
                  value = 10000,
                  min = 1),
   actionButton("add_ticker", label= "Add ticker to portfolio"),
   actionButton("remove_ticker", label = "Remove ticker from portfolio"),
+  tags$hr(),
   dateInput("start_date", label = "Select the start date of the analysis",
               min = lubridate::today() - lubridate::period(10, "years"), 
               max= lubridate::today() - lubridate::period(6, "months"), 
@@ -38,7 +42,9 @@ ui <- pageWithSidebar(
   downloadButton("save_portfolio", "Save current portfolio")),
   tabPanel("Upload Portfolio",
            # Input: Select a file ----
-           fileInput("file1", "Choose CSV File",
+           strong("Choose CSV File"), div(style="display: inline-block;vertical-align:top;", dropdownButton("I strongly recommend using a CSV file generated from this Shiny App. However, if you use another CSV file make sure that the column structures and at best even the headers are the same as this Shiny App.", status = 'success', icon = icon('info'), size= "xs")),
+           tags$hr(),
+           fileInput("file1", label= NULL,
                      multiple = FALSE,
                      accept = c("text/csv",
                                 "text/comma-separated-values,text/plain",
@@ -75,9 +81,10 @@ ui <- pageWithSidebar(
            actionButton("create_file", "Create Analysis")
            
           
-           
+            
   )
     )
+       
   ),
   
   # Main panel for displaying outputs ----
@@ -111,7 +118,9 @@ ui <- pageWithSidebar(
                 h3("Single Stock adjusted returns and selected baseline index"),
                 dataTableOutput("rarb_single_stock"))
                 
-    )
+    ),
+    code("Made by MaxMlang"),
+    tags$a(href= "https://github.com/MaxMLang", icon("github", "fa-2x"))
   
     
   )
@@ -152,7 +161,7 @@ server <- function(input, output) {
     if(nrow(df_portfolio)==0){
       showNotification("Your Portfolio is empty, add Stocks to perform an Analysis", type = "error")
     }else{
-    
+      showNotification("Your portfolio analysis is ongoing...", type= "message")
     stock_returns_monthly <- df_portfolio$ticker %>%
       tq_get(get  = "stock.prices",
              from = input$start_date) %>%
@@ -234,7 +243,7 @@ server <- function(input, output) {
     
     output$capm_single_portfolio <- renderDataTable(capm_single_portfolio)
     
-    # Portfolio growth plot
+    # Portfolio growth plot ----
     plot_portfolio_growth <-  stock_returns_monthly %>%
       tq_portfolio(assets_col   = symbol, 
                    returns_col  = Ra, 
@@ -285,7 +294,8 @@ server <- function(input, output) {
         scale_y_continuous(labels = scales::percent)
     
     output$plot_stock_returns <- renderPlot(plot_stock_returns)
-      
+    
+    
     }
     
     
@@ -319,8 +329,9 @@ server <- function(input, output) {
     output$plot_country_treemap <- renderPlot(plot_country_treemap)
     
     
-    
-  }
+    showNotification("Done!", type= "message")
+  
+    }
   })
   
   observeEvent(input$create_file, {
@@ -342,6 +353,7 @@ server <- function(input, output) {
     if(nrow(df_portfolio)==0){
       showNotification("Your Portfolio is empty, add Stocks to perform an Analysis", type = "error")
     }else{
+      showNotification("Your portfolio analysis is ongoing...", type= "message")
       
       stock_returns_monthly <- df_portfolio$ticker %>%
         tq_get(get  = "stock.prices",
@@ -507,6 +519,7 @@ server <- function(input, output) {
         scale_fill_brewer(palette = "Set3")
       
       output$plot_country_treemap <- renderPlot(plot_country_treemap)
+      showNotification("Done!", type= "message")
     }
   })
     output$save_portfolio <- downloadHandler(
