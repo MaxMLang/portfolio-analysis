@@ -13,6 +13,8 @@ ui <- pageWithSidebar(
   
   # Sidebar panel for inputs ----
   sidebarPanel(
+    tabsetPanel(
+      tabPanel("Manual Input",
     pickerInput("ticker", "Select your ticker symbol", 
                 multiple = FALSE,
                 options = list( `live-search` = TRUE),
@@ -21,6 +23,9 @@ ui <- pageWithSidebar(
                  value = 1,
                  min = 1,
                  step = 1),
+    numericInput("invest_sum", "Insert the sum you invested in $",
+                 value = 10000,
+                 min = 1),
   actionButton("add_ticker", label= "Add ticker to portfolio"),
   actionButton("remove_ticker", label = "Remove ticker from portfolio"),
   dateInput("start_date", label = "Select the start date of the analysis",
@@ -29,20 +34,83 @@ ui <- pageWithSidebar(
               value= lubridate::today()-lubridate::period(1, "year")),
   pickerInput("baseline", label = "Select the baseline index your portfolio should be compared to",
               choices = c("SP500", "NASDAQ", "Dow Jones", "DAX")),
-  actionButton("create", "Create Analysis")),
+  actionButton("create", "Create Analysis"),
+  downloadButton("save_portfolio", "Save current portfolio")),
+  tabPanel("Upload Portfolio",
+           # Input: Select a file ----
+           fileInput("file1", "Choose CSV File",
+                     multiple = FALSE,
+                     accept = c("text/csv",
+                                "text/comma-separated-values,text/plain",
+                                ".csv")),
+           numericInput("invest_sum_file", "Insert the sum you invested in $",
+                        value = 10000,
+                        min = 1),
+           dateInput("start_date_file", label = "Select the start date of the analysis",
+                     min = lubridate::today() - lubridate::period(10, "years"), 
+                     max= lubridate::today() - lubridate::period(6, "months"), 
+                     value= lubridate::today()-lubridate::period(1, "year")),
+           pickerInput("baseline_file", label = "Select the baseline index your portfolio should be compared to",
+                       choices = c("SP500", "NASDAQ", "Dow Jones", "DAX")),
+           
+           # Horizontal line ----
+           tags$hr(),
+           
+           # Input: Checkbox if file has header ----
+           checkboxInput("header", "Header", TRUE),
+           
+           # Input: Select separator ----
+           radioButtons("sep", "Separator",
+                        choices = c(Comma = ",",
+                                    Semicolon = ";",
+                                    Tab = "\t"),
+                        selected = ","),
+           
+           # Input: Select quotes ----
+           radioButtons("quote", "Quote",
+                        choices = c(None = "",
+                                    "Double Quote" = '"',
+                                    "Single Quote" = "'"),
+                        selected = '"'),
+           actionButton("create_file", "Create Analysis")
+           
+          
+           
+  )
+    )
+  ),
   
   # Main panel for displaying outputs ----
   mainPanel(
     
+    h3("Portfolio overview"),
     tableOutput("df_portfolio"),
 
     tabsetPanel(type = "tabs",
-                tabPanel("Single Stocks", # dataTableOutput("stock_returns_monthly"),
-                                          dataTableOutput("rarb_single_stock"),
-                                          dataTableOutput("capm_single_stock")),
-                tabPanel("Portfolio", # dataTableOutput("portfolio_returns_monthly"),
-                                      dataTableOutput("rarb_single_portfolio"), 
-                                      dataTableOutput("capm_single_portfolio"))
+                tabPanel("Overall",
+                         h3("Industry Exposure"),
+                         plotOutput("plot_industry_treemap"),
+                         h3("Country Exposure"),
+                         plotOutput("plot_country_treemap")),
+                tabPanel("Portfolio Performance", # dataTableOutput("portfolio_returns_monthly"),
+                         h3("Portfolio growth"),
+                         plotOutput("plot_portfolio_growth"),
+                         h3("Portfolio returns"),
+                         plotOutput("plot_portfolio_returns"),
+                         h3("CAPM model for your Portfolio"),
+                         p(""),
+                         dataTableOutput("capm_single_portfolio"),
+                         h3("Adjusted returns of portfolio and selected baseline index"),
+                         dataTableOutput("rarb_single_portfolio")),
+                tabPanel("Stock Performance", #dataTableOutput("stock_returns_monthly"),
+                         h3("Single stock returns"),
+                         h5("(Only displayed for a portfolio with less than 15 tickers)"),
+                                          plotOutput("plot_stock_returns"),
+                        h3("CAPM model for each stock"),
+                                          dataTableOutput("capm_single_stock"),
+                h3("Single Stock adjusted returns and selected baseline index"),
+                dataTableOutput("rarb_single_stock"))
+                
     )
   
     
@@ -64,19 +132,27 @@ server <- function(input, output) {
     
     df_portfolio$pct_of_portfolio <<- df_portfolio$amount / sum(df_portfolio$amount)
     
-    output$df_portfolio <- renderTable(df_portfolio)
-  
+
     
+    output$df_portfolio <- renderTable(df_portfolio %>% 
+                                         rename("Ticker Symbol"= "ticker",
+                                                "Amount" = "amount",
+                                                "Percentage of Portfolio"= "pct_of_portfolio"))
+
     
   })
   
   observeEvent(input$remove_ticker, {
     df_portfolio <<- df_portfolio %>% filter(ticker!= input$ticker)
     output$df_portfolio <- renderTable(df_portfolio)
+    
   })
   
   observeEvent(input$create, {
- 
+    if(nrow(df_portfolio)==0){
+      showNotification("Your Portfolio is empty, add Stocks to perform an Analysis", type = "error")
+    }else{
+    
     stock_returns_monthly <- df_portfolio$ticker %>%
       tq_get(get  = "stock.prices",
              from = input$start_date) %>%
@@ -137,12 +213,13 @@ server <- function(input, output) {
                         performance_fun = table.CAPM)
      
     output$capm_single_stock <- renderDataTable(capm_single_stock)
-  
+    
+    wts <- as.tibble(df_portfolio %>% select(ticker, pct_of_portfolio))
     
     portfolio_returns_monthly <- stock_returns_monthly %>%
       tq_portfolio(assets_col  = symbol,
                    returns_col = Ra,
-                   weights     = as.tibble(df_portfolio %>% select(ticker, pct_of_portfolio)),
+                   weights     = wts,
                    col_rename  = "Ra")
     # output$portfolio_returns_monthly <- renderDataTable(portfolio_returns_monthly)
     
@@ -156,9 +233,294 @@ server <- function(input, output) {
       tq_performance(Ra = Ra, Rb = Rb, performance_fun = table.CAPM)
     
     output$capm_single_portfolio <- renderDataTable(capm_single_portfolio)
-  
     
+    # Portfolio growth plot
+    plot_portfolio_growth <-  stock_returns_monthly %>%
+      tq_portfolio(assets_col   = symbol, 
+                   returns_col  = Ra, 
+                   weights      = wts, 
+                   col_rename   = "investment.growth",
+                   wealth.index = TRUE) %>%
+      mutate(investment.growth = investment.growth*input$invest_sum)%>%
+      ggplot(aes(x = date, y = investment.growth)) +
+      geom_line(size = 1, color = palette_light()[[1]]) +
+      labs(title = "Portfolio Growth",
+           x = "", y = "Portfolio Value") +
+      geom_smooth(method = "loess") +
+      theme_tq() +
+      scale_color_tq() +
+      scale_y_continuous(labels = scales::dollar)
+    
+    output$plot_portfolio_growth <- renderPlot(plot_portfolio_growth)
+    
+    # Portfolio Returns ----
+    
+    plot_portfolio_returns <- stock_returns_monthly %>%
+      tq_portfolio(assets_col  = symbol, 
+                   returns_col = Ra, 
+                   weights     = wts, 
+                   col_rename  = "Ra") %>% 
+      ggplot(aes(x = date, y= Ra)) +
+      geom_bar(stat = "identity", fill = palette_light()[[1]])+
+      labs(title = "Portfolio Returns",
+           x = "", y = "Monthly Returns") +
+      geom_smooth(method = "lm") +
+      theme_tq() +
+      scale_color_tq() +
+      scale_y_continuous(labels = scales::percent)
+    
+    output$plot_portfolio_returns <- renderPlot(plot_portfolio_returns)
+ 
+    # Stock returns facet plot----
+    if(length(unique(df_portfolio$ticker)) <= 15){
+    plot_stock_returns <- stock_returns_monthly %>% 
+        ggplot(aes(x= date, y= Ra))+
+        facet_wrap(~ symbol)+
+        geom_bar(stat= "identity", fill= palette_light()[[1]])+
+        labs(title = "Portfolio Returns",
+             x = "", y = "Monthly Returns") +
+        geom_smooth(method = "lm") +
+        theme_tq() +
+        scale_color_tq() +
+        scale_y_continuous(labels = scales::percent)
+    
+    output$plot_stock_returns <- renderPlot(plot_stock_returns)
+      
+    }
+    
+    
+    
+   # Exposure Plot ----
+    
+    df_portfolio_ext <- left_join(df_portfolio, tickers, by= c("ticker"= "Symbol"))
+    
+    
+    plot_industry_treemap <-  df_portfolio_ext %>%
+      group_by(Industry) %>% 
+      summarise(amount_industry= sum(amount)) %>% 
+      mutate(pct_industry= amount_industry/sum(amount_industry)) %>% 
+      ggplot(aes(area= pct_industry, fill= Industry, label= scales::percent(pct_industry)))+
+      geom_treemap()+
+      geom_treemap_text()+
+      scale_fill_brewer(palette = "Set3")
+    
+    output$plot_industry_treemap <- renderPlot(plot_industry_treemap)
+    
+    
+    plot_country_treemap <-  df_portfolio_ext %>%
+      group_by(Country) %>% 
+      summarise(amount_country= sum(amount)) %>% 
+      mutate(pct_country= amount_country/sum(amount_country)) %>% 
+      ggplot(aes(area= pct_country, fill= Country, label= scales::percent(pct_country)))+
+      geom_treemap()+
+      geom_treemap_text()+
+      scale_fill_brewer(palette = "Set3")
+    
+    output$plot_country_treemap <- renderPlot(plot_country_treemap)
+    
+    
+    
+  }
   })
+  
+  observeEvent(input$create_file, {
+      # Input file testing ----
+      req(input$file1)
+      tryCatch(
+        {
+          df_portfolio <<- read.csv(input$file1$datapath,
+                         header = input$header,
+                         sep = input$sep,
+                         quote = input$quote)
+        },
+        error = function(e) {
+          # return a safeError if a parsing error occurs
+          stop(safeError(e))
+        })
+    
+    # Analysis start
+    if(nrow(df_portfolio)==0){
+      showNotification("Your Portfolio is empty, add Stocks to perform an Analysis", type = "error")
+    }else{
+      
+      stock_returns_monthly <- df_portfolio$ticker %>%
+        tq_get(get  = "stock.prices",
+               from = input$start_date_file) %>%
+        group_by(symbol) %>%
+        tq_transmute(select     = adjusted,
+                     mutate_fun = periodReturn,
+                     period     = "monthly",
+                     col_rename = "Ra") %>% 
+        arrange(desc(date))
+      
+      # output$stock_returns_monthly <- renderDataTable(stock_returns_monthly)
+      
+      
+      # baseline prices
+      if(input$baseline_file %in% "SP500"){
+        baseline_returns_monthly <- "^GSPC" %>%
+          tq_get(get  = "stock.prices",
+                 from = input$start_date_file) %>%
+          tq_transmute(select     = adjusted,
+                       mutate_fun = periodReturn,
+                       period     = "monthly",
+                       col_rename = "Rb")
+        
+      }else if(input$baseline_file %in% "NASDAQ"){
+        
+        baseline_returns_monthly <- "NDAQ" %>%
+          tq_get(get  = "stock.prices",
+                 from = input$start_date_file)%>%
+          tq_transmute(select     = adjusted,
+                       mutate_fun = periodReturn,
+                       period     = "monthly",
+                       col_rename = "Rb")
+        
+      }else if (input$baseline_file %in% "Dow Jones"){
+        baseline_returns_monthly <- "^DJI" %>%
+          tq_get(get  = "stock.prices",
+                 from = input$start_date_file) %>%
+          tq_transmute(select     = adjusted,
+                       mutate_fun = periodReturn,
+                       period     = "monthly",
+                       col_rename = "Rb")
+        
+      }else if (input$baseline_file %in% "DAX"){
+        baseline_returns_monthly <- "^GDAXI" %>%
+          tq_get(get  = "stock.prices",
+                 from = input$start_date_file) %>%
+          tq_transmute(select     = adjusted,
+                       mutate_fun = periodReturn,
+                       period     = "monthly",
+                       col_rename = "Rb")
+      }
+      
+      rarb_single_stock <-left_join(stock_returns_monthly, baseline_returns_monthly, by= c("date"= "date"))
+      output$rarb_single_stock <- renderDataTable(rarb_single_stock)
+      capm_single_stock <- rarb_single_stock %>%
+        tq_performance(Ra = Ra,
+                       Rb = Rb,
+                       performance_fun = table.CAPM)
+      
+      output$capm_single_stock <- renderDataTable(capm_single_stock)
+      
+      wts <- as.tibble(df_portfolio %>% select(ticker, pct_of_portfolio))
+      
+      portfolio_returns_monthly <- stock_returns_monthly %>%
+        tq_portfolio(assets_col  = symbol,
+                     returns_col = Ra,
+                     weights     = wts,
+                     col_rename  = "Ra")
+      # output$portfolio_returns_monthly <- renderDataTable(portfolio_returns_monthly)
+      
+      RaRb_single_portfolio <- left_join(portfolio_returns_monthly,
+                                         baseline_returns_monthly,
+                                         by = "date")
+      
+      output$rarb_single_portfolio <- renderDataTable(RaRb_single_portfolio)
+      
+      capm_single_portfolio <- RaRb_single_portfolio %>%
+        tq_performance(Ra = Ra, Rb = Rb, performance_fun = table.CAPM)
+      
+      output$capm_single_portfolio <- renderDataTable(capm_single_portfolio)
+      
+      # Portfolio growth plot
+      plot_portfolio_growth <-  stock_returns_monthly %>%
+        tq_portfolio(assets_col   = symbol, 
+                     returns_col  = Ra, 
+                     weights      = wts, 
+                     col_rename   = "investment.growth",
+                     wealth.index = TRUE) %>%
+        mutate(investment.growth = investment.growth*input$invest_sum_file)%>%
+        ggplot(aes(x = date, y = investment.growth)) +
+        geom_line(size = 1, color = palette_light()[[1]]) +
+        labs(title = "Portfolio Growth",
+             x = "", y = "Portfolio Value") +
+        geom_smooth(method = "loess") +
+        theme_tq() +
+        scale_color_tq() +
+        scale_y_continuous(labels = scales::dollar)
+      
+      output$plot_portfolio_growth <- renderPlot(plot_portfolio_growth)
+      
+      # Portfolio Returns ----
+      
+      plot_portfolio_returns <- stock_returns_monthly %>%
+        tq_portfolio(assets_col  = symbol, 
+                     returns_col = Ra, 
+                     weights     = wts, 
+                     col_rename  = "Ra") %>% 
+        ggplot(aes(x = date, y= Ra)) +
+        geom_bar(stat = "identity", fill = palette_light()[[1]])+
+        labs(title = "Portfolio Returns",
+             x = "", y = "Monthly Returns") +
+        geom_smooth(method = "lm") +
+        theme_tq() +
+        scale_color_tq() +
+        scale_y_continuous(labels = scales::percent)
+      
+      output$plot_portfolio_returns <- renderPlot(plot_portfolio_returns)
+      
+      # Stock returns facet plot----
+      if(length(unique(df_portfolio$ticker)) <= 15){
+        plot_stock_returns <- stock_returns_monthly %>% 
+          ggplot(aes(x= date, y= Ra))+
+          facet_wrap(~ symbol)+
+          geom_bar(stat= "identity", fill= palette_light()[[1]])+
+          labs(title = "Portfolio Returns",
+               x = "", y = "Monthly Returns") +
+          geom_smooth(method = "lm") +
+          theme_tq() +
+          scale_color_tq() +
+          scale_y_continuous(labels = scales::percent)
+        
+        output$plot_stock_returns <- renderPlot(plot_stock_returns)
+      
+      }
+      
+      
+      
+      # Exposure Plot ----
+      
+      df_portfolio_ext <- left_join(df_portfolio, tickers, by= c("ticker"= "Symbol"))
+      
+      
+      plot_industry_treemap <-  df_portfolio_ext %>%
+        group_by(Industry) %>% 
+        summarise(amount_industry= sum(amount)) %>% 
+        mutate(pct_industry= amount_industry/sum(amount_industry)) %>% 
+        ggplot(aes(area= pct_industry, fill= Industry, label= scales::percent(pct_industry)))+
+        geom_treemap()+
+        geom_treemap_text()+
+        scale_fill_brewer(palette = "Set3")
+      
+      output$plot_industry_treemap <- renderPlot(plot_industry_treemap)
+      
+      
+      plot_country_treemap <-  df_portfolio_ext %>%
+        group_by(Country) %>% 
+        summarise(amount_country= sum(amount)) %>% 
+        mutate(pct_country= amount_country/sum(amount_country)) %>% 
+        ggplot(aes(area= pct_country, fill= Country, label= scales::percent(pct_country)))+
+        geom_treemap()+
+        geom_treemap_text()+
+        scale_fill_brewer(palette = "Set3")
+      
+      output$plot_country_treemap <- renderPlot(plot_country_treemap)
+    }
+  })
+    output$save_portfolio <- downloadHandler(
+      filename = function() {
+        paste("portfolio-", Sys.Date(), ".csv", sep="")
+      },
+      content = function(file) {
+        write.csv(df_portfolio, file, row.names = FALSE)
+      }
+    )
+    
+    
+  
+  
 
 }
 

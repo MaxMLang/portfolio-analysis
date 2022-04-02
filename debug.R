@@ -1,7 +1,11 @@
-tickers <- TTR::stockSymbols()
+# tickers <- TTR::stockSymbols()
+# 
+# tickers <- tickers %>%
+#   select(Symbol, Name, Exchange, ETF)
 
-tickers <- tickers %>%
-  select(Symbol, Name, Exchange, ETF)
+tickers <- read_csv("/Users/max/Desktop/nasdaq_screener_1648912388464.csv")
+tickers <- tickers %>% 
+  select(Symbol, Name, Country, Industry, `IPO Year`)
 
 
 df_portfolio <- data.frame(ticker= character(), amount= numeric())
@@ -28,7 +32,7 @@ Ra <- df_portfolio$ticker %>%
 
 # baseline prices
 
-Rb_sp <- "^GSPC" %>%
+Rb <- "^GSPC" %>%
   tq_get(get  = "stock.prices",
          from = lubridate::today()- lubridate::period(1, "year"),
          to   = lubridate::today()) %>%
@@ -38,7 +42,7 @@ Rb_sp <- "^GSPC" %>%
                col_rename = "Rb")
 
 
-RaRb <-left_join(Ra, Rb_sp, by= c("date"= "date"))
+RaRb <-left_join(Ra, Rb, by= c("date"= "date"))
 
 RaRb %>%
   tq_performance(Ra = Ra,
@@ -103,3 +107,75 @@ RaRb_single_portfolio %>%
   tq_performance(Ra = Ra, Rb = Rb, performance_fun = table.CAPM)
 
 
+# Portfolio Growth ----
+stock_returns_monthly %>%
+  tq_portfolio(assets_col   = symbol, 
+               returns_col  = Ra, 
+               weights      = wts, 
+               col_rename   = "investment.growth",
+               wealth.index = TRUE) %>%
+  mutate(investment.growth = investment.growth*10000)%>%
+  ggplot(aes(x = date, y = investment.growth)) +
+  geom_line(size = 1, color = palette_light()[[1]]) +
+  labs(title = "Portfolio Growth",
+       x = "", y = "Portfolio Value") +
+  geom_smooth(method = "loess") +
+  theme_tq() +
+  scale_color_tq() +
+  scale_y_continuous(labels = scales::dollar)
+
+# Portfolio Returns ----
+wts <- as.tibble(df_portfolio) %>% select()
+
+stock_returns_monthly %>%
+  tq_portfolio(assets_col  = symbol, 
+               returns_col = Ra, 
+               weights     = wts, 
+               col_rename  = "Ra") %>% 
+  ggplot(aes(x = date, y= Ra)) +
+  geom_bar(stat = "identity", fill = palette_light()[[1]])+
+  labs(title = "Portfolio Returns",
+       x = "", y = "Monthly Returns") +
+  geom_smooth(method = "lm") +
+  theme_tq() +
+  scale_color_tq() +
+  scale_y_continuous(labels = scales::percent)
+
+# Stock returns facet plot----
+stock_returns_monthly %>% 
+  ggplot(aes(x= date, y= Ra))+
+  facet_wrap(~ symbol)+
+  geom_bar(stat= "identity", fill= palette_light()[[1]])+
+  labs(title = "Portfolio Returns",
+       x = "", y = "Monthly Returns") +
+  geom_smooth(method = "lm") +
+  theme_tq() +
+  scale_color_tq() +
+  scale_y_continuous(labels = scales::percent)
+
+# Stock returns to baseline
+
+
+df_portfolio_ext <- left_join(df_portfolio, tickers, by= c("ticker"= "Symbol"))
+
+tickers
+
+# Industry treemap ----
+df_portfolio_ext %>%
+  group_by(Industry) %>% 
+  summarise(amount_industry= sum(amount)) %>% 
+  mutate(pct_industry= amount_industry/sum(amount_industry)) %>% 
+  ggplot(aes(area= pct_industry, fill= Industry, label= Industry))+
+  geom_treemap()+
+  geom_treemap_text()+
+  scale_fill_brewer(palette = "Set3")
+  
+
+df_portfolio_ext %>%
+  group_by(Country) %>% 
+  summarise(amount_country= sum(amount)) %>% 
+  mutate(pct_country= amount_country/sum(amount_country)) %>% 
+  ggplot(aes(area= pct_country, fill= Country, label= Country))+
+  geom_treemap()+
+  geom_treemap_text()+
+  scale_fill_brewer(palette = "Set3")
