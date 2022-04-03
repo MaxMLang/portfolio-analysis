@@ -163,9 +163,9 @@ server <- function(input, output) {
 
     
     output$df_portfolio <- renderTable(df_portfolio %>% 
+                                         select(ticker, amount) %>% 
                                          rename("Ticker Symbol"= "ticker",
-                                                "Amount" = "amount",
-                                                "Percentage of Portfolio"= "pct_of_portfolio"))
+                                                "Amount" = "amount"))
 
     
   })
@@ -190,6 +190,10 @@ server <- function(input, output) {
                    period     = "monthly",
                    col_rename = "Ra") %>% 
       arrange(desc(date))
+    
+    value <<- tq_get(df_portfolio$ticker, from= lubridate::today()-1) %>% select(close) %>% as.data.frame()
+    df_portfolio <- df_portfolio %>% mutate(pct_value= value$close*amount / sum(amount*value$close) )
+    
     
     # output$stock_returns_monthly <- renderDataTable(stock_returns_monthly)
     
@@ -326,8 +330,7 @@ server <- function(input, output) {
     
     plot_industry_treemap <-  df_portfolio_ext %>%
       group_by(Industry) %>% 
-      summarise(amount_industry= sum(amount)) %>% 
-      mutate(pct_industry= amount_industry/sum(amount_industry)) %>% 
+      summarise(pct_industry= sum(pct_value)) %>% 
       ggplot(aes(area= pct_industry, fill= Industry, label= scales::percent(pct_industry)))+
       geom_treemap()+
       geom_treemap_text()+
@@ -338,8 +341,7 @@ server <- function(input, output) {
     
     plot_country_treemap <-  df_portfolio_ext %>%
       group_by(Country) %>% 
-      summarise(amount_country= sum(amount)) %>% 
-      mutate(pct_country= amount_country/sum(amount_country)) %>% 
+      summarise(pct_country= sum(pct_value)) %>% 
       ggplot(aes(area= pct_country, fill= Country, label= scales::percent(pct_country)))+
       geom_treemap()+
       geom_treemap_text()+
@@ -374,6 +376,7 @@ server <- function(input, output) {
     }else{
       showNotification("Your portfolio analysis is ongoing...", type= "message")
       
+      
       stock_returns_monthly <- df_portfolio$ticker %>%
         tq_get(get  = "stock.prices",
                from = input$start_date_file) %>%
@@ -383,6 +386,9 @@ server <- function(input, output) {
                      period     = "monthly",
                      col_rename = "Ra") %>% 
         arrange(desc(date))
+      
+      value <<- tq_get(df_portfolio$ticker, from= lubridate::today()-1) %>% select(close) %>% as.data.frame()
+      df_portfolio <- df_portfolio %>% mutate(pct_value= value$close*amount / sum(amount*value$close) )
       
       # output$stock_returns_monthly <- renderDataTable(stock_returns_monthly)
       
@@ -518,8 +524,7 @@ server <- function(input, output) {
       
       plot_industry_treemap <-  df_portfolio_ext %>%
         group_by(Industry) %>% 
-        summarise(amount_industry= sum(amount)) %>% 
-        mutate(pct_industry= amount_industry/sum(amount_industry)) %>% 
+        summarise(pct_industry= sum(pct_value)) %>% 
         ggplot(aes(area= pct_industry, fill= Industry, label= scales::percent(pct_industry)))+
         geom_treemap()+
         geom_treemap_text()+
@@ -530,8 +535,7 @@ server <- function(input, output) {
       
       plot_country_treemap <-  df_portfolio_ext %>%
         group_by(Country) %>% 
-        summarise(amount_country= sum(amount)) %>% 
-        mutate(pct_country= amount_country/sum(amount_country)) %>% 
+        summarise(pct_country= sum(pct_value)) %>% 
         ggplot(aes(area= pct_country, fill= Country, label= scales::percent(pct_country)))+
         geom_treemap()+
         geom_treemap_text()+
