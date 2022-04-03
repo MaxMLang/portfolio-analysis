@@ -1,8 +1,8 @@
-
+# Portfolio Analyser R Shiny App
 ![Logo](https://img.freepik.com/free-vector/financial-guru-expert-investment-profit-growth-financial-advisor-wealth-management_327176-590.jpg?w=500)
 
 
-# Portfolio Analyser R Shiny App
+
 
 This R shiny App let's you analyse your Portfolio or single stocks. You can save your created portfolio into a CSV File and upload it later again. The App will create several plots on: 
 - Industry / country exposure 
