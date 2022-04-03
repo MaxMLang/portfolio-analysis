@@ -29,13 +29,14 @@ _Note_ that a CAPM model uses several assumption that often do not hold in reali
 
 [![MIT License](https://img.shields.io/apm/l/atomic-design-ui.svg?)](https://github.com/tterb/atomic-design-ui/blob/master/LICENSEs)
 
-
-## Authors
-
-- [@MaxMLang](https://www.github.com/MaxMLang)
-
-
 ## Contributing
 
 Contributions are always welcome!
 Link up with me or let me now about bugs or improvements.
+
+## Author
+
+- [@MaxMLang](https://www.github.com/MaxMLang)
+
+
+
