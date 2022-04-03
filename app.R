@@ -124,7 +124,7 @@ Evaluating a past tracking error of a portfolio manager may provide insight into
                          p(strong("Treynor Ratio"), br(), "The Treynor ratio is a risk/return measure that allows investors to adjust a portfolio's returns for systematic risk.
 A higher Treynor ratio result means a portfolio is a more suitable investment.
 The Treynor ratio is similar to the Sharpe ratio, although the Sharpe ratio uses a portfolio's standard deviation to adjust the portfolio returns."),
-                         tableOutput("capm_single_portfolio"),
+                         dataTableOutput("capm_single_portfolio"),
                          h3("Adjusted returns of portfolio and selected baseline index"),
                          dataTableOutput("rarb_single_portfolio")),
                 tabPanel("Stock Performance", #dataTableOutput("stock_returns_monthly"),
@@ -264,7 +264,7 @@ server <- function(input, output) {
     capm_single_portfolio <- RaRb_single_portfolio %>%
       tq_performance(Ra = Ra, Rb = Rb, performance_fun = table.CAPM)
     
-    output$capm_single_portfolio <- renderTable(capm_single_portfolio)
+    output$capm_single_portfolio <- renderDataTable(capm_single_portfolio)
     
     # Portfolio growth plot ----
     plot_portfolio_growth <-  stock_returns_monthly %>%
@@ -388,7 +388,7 @@ server <- function(input, output) {
         arrange(desc(date))
       
       value <<- tq_get(df_portfolio$ticker, from= lubridate::today()-1) %>% select(close) %>% as.data.frame()
-      df_portfolio <- df_portfolio %>% mutate(pct_value= value$close*amount / sum(amount*value$close) )
+      df_portfolio <<- df_portfolio %>% mutate(pct_value= value$close*amount / sum(amount*value$close) )
       
       # output$stock_returns_monthly <- renderDataTable(stock_returns_monthly)
       
@@ -459,7 +459,7 @@ server <- function(input, output) {
       capm_single_portfolio <- RaRb_single_portfolio %>%
         tq_performance(Ra = Ra, Rb = Rb, performance_fun = table.CAPM)
       
-      output$capm_single_portfolio <- tableOutput(capm_single_portfolio)
+      output$capm_single_portfolio <- renderDataTable(capm_single_portfolio)
       
       # Portfolio growth plot
       plot_portfolio_growth <-  stock_returns_monthly %>%
