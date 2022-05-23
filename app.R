@@ -190,8 +190,8 @@ server <- function(input, output) {
                    period     = "monthly",
                    col_rename = "Ra") %>% 
       arrange(desc(date))
-    
-    value <<- tq_get(df_portfolio$ticker, from= lubridate::today()-1) %>% select(close) %>% as.data.frame()
+    newest <- max(stock_returns_monthly$date)
+    value <<- tq_get(df_portfolio$ticker, from= newest) %>% select(close) %>% as.data.frame()
     df_portfolio <- df_portfolio %>% mutate(pct_value= value$close*amount / sum(amount*value$close) )
     
     
