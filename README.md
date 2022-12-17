@@ -27,9 +27,6 @@ https://maxmlang.shinyapps.io/portfolio_analysis/
  - [NASDAQ stock screener](https://www.nasdaq.com/market-activity/stocks/screener)
 
 
-
-[![MIT License](https://img.shields.io/apm/l/atomic-design-ui.svg?)](https://github.com/tterb/atomic-design-ui/blob/master/LICENSEs)
-
 ## Contributing
 
 Contributions are always welcome!
