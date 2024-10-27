@@ -18,8 +18,7 @@ This R shiny App let's you analyse your Portfolio or single stocks. You can save
     
 _Note_ that a CAPM model uses several assumption that often do not hold in reality. (If yo are interest on that topic i recommend this [article](https://hbr.org/1982/01/does-the-capital-asset-pricing-model-work) by David W. Mullins, Jr.)
 
-## App Link
-https://maxmlang.shinyapps.io/portfolio_analysis/
+
 
 ## Acknowledgements
 
